@@ -40,12 +40,12 @@ void state_bcm() {
 
 	struct {
 		struct bcm_msg_head msg_head;
-		struct canfd_frame frame;
+		struct can_frame frame;
 	} msg;
 
 	struct {
 		struct bcm_msg_head msg_head;
-		struct canfd_frame frame[257]; /* MAX_NFRAMES + MUX MASK */
+		struct can_frame frame[257]; /* MAX_NFRAMES + MUX MASK */
 	} muxmsg;
 
 	if(previous_state != STATE_BCM) {
@@ -102,12 +102,12 @@ void state_bcm() {
 
 		/* Check if this is an error frame */
 		if(msg.msg_head.can_id & CAN_ERR_FLAG) {
-			if(msg.frame.len != CAN_ERR_DLC) {
+			if(msg.frame.can_dlc != CAN_ERR_DLC) {
 				PRINT_ERROR("Error frame has a wrong DLC!\n")
 					} else {
 				snprintf(rxmsg, RXLEN, "< error %03X %ld.%06ld ", msg.msg_head.can_id, tv.tv_sec, tv.tv_usec);
 
-				for ( i = 0; i < msg.frame.len; i++)
+				for ( i = 0; i < msg.frame.can_dlc; i++)
 					snprintf(rxmsg + strlen(rxmsg), RXLEN - strlen(rxmsg), "%02X ",
 						 msg.frame.data[i]);
 
@@ -116,7 +116,6 @@ void state_bcm() {
 				tcp_quickack(client_socket);
 			}
 		} else {
-//			fprintf(stderr, "msg.msg_head.can_id: %d ret size: %d\n", msg.msg_head.can_id, ret);
 			if(msg.msg_head.can_id & CAN_EFF_FLAG) {
 				snprintf(rxmsg, RXLEN, "< frame %08X %ld.%06ld ",
 					 msg.msg_head.can_id & CAN_EFF_MASK, tv.tv_sec, tv.tv_usec);
@@ -125,7 +124,7 @@ void state_bcm() {
 					 msg.msg_head.can_id & CAN_SFF_MASK, tv.tv_sec, tv.tv_usec);
 			}
 
-			for ( i = 0; i < msg.frame.len; i++)
+			for ( i = 0; i < msg.frame.can_dlc; i++)
 				snprintf(rxmsg + strlen(rxmsg), RXLEN - strlen(rxmsg), "%02X ",
 					 msg.frame.data[i]);
 
@@ -171,7 +170,7 @@ void state_bcm() {
 				       "%hhx %hhx %hhx %hhx %hhx %hhx "
 				       "%hhx %hhx >",
 				       &msg.msg_head.can_id,
-				       &msg.frame.len,
+				       &msg.frame.can_dlc,
 				       &msg.frame.data[0],
 				       &msg.frame.data[1],
 				       &msg.frame.data[2],
@@ -182,8 +181,8 @@ void state_bcm() {
 				       &msg.frame.data[7]);
 
 			if ( (items < 2) ||
-			     (msg.frame.len > 64) ||
-			     (items != 2 + msg.frame.len)) {
+			     (msg.frame.can_dlc > 8) ||
+			     (items != 2 + msg.frame.can_dlc)) {
 				PRINT_ERROR("Syntax error in send command\n")
 					return;
 			}
@@ -208,7 +207,7 @@ void state_bcm() {
 				       &msg.msg_head.ival2.tv_sec,
 				       &msg.msg_head.ival2.tv_usec,
 				       &msg.msg_head.can_id,
-				       &msg.frame.len,
+				       &msg.frame.can_dlc,
 				       &msg.frame.data[0],
 				       &msg.frame.data[1],
 				       &msg.frame.data[2],
@@ -219,8 +218,8 @@ void state_bcm() {
 				       &msg.frame.data[7]);
 
 			if( (items < 4) ||
-			    (msg.frame.len > 64) ||
-			    (items != 4 + msg.frame.len) ) {
+			    (msg.frame.can_dlc > 8) ||
+			    (items != 4 + msg.frame.can_dlc) ) {
 				PRINT_ERROR("Syntax error in add command.\n");
 				return;
 			}
@@ -244,7 +243,7 @@ void state_bcm() {
 				       "%hhx %hhx %hhx %hhx %hhx %hhx "
 				       "%hhx %hhx >",
 				       &msg.msg_head.can_id,
-				       &msg.frame.len,
+				       &msg.frame.can_dlc,
 				       &msg.frame.data[0],
 				       &msg.frame.data[1],
 				       &msg.frame.data[2],
@@ -255,8 +254,8 @@ void state_bcm() {
 				       &msg.frame.data[7]);
 
 			if ( (items < 2) ||
-			     (msg.frame.len > 64) ||
-			     (items != 2 + msg.frame.len)) {
+			     (msg.frame.can_dlc > 8) ||
+			     (items != 2 + msg.frame.can_dlc)) {
 				PRINT_ERROR("Syntax error in update send job command\n")
 					return;
 			}
@@ -304,7 +303,7 @@ void state_bcm() {
 				       &msg.msg_head.ival2.tv_sec,
 				       &msg.msg_head.ival2.tv_usec,
 				       &msg.msg_head.can_id,
-				       &msg.frame.len,
+				       &msg.frame.can_dlc,
 				       &msg.frame.data[0],
 				       &msg.frame.data[1],
 				       &msg.frame.data[2],
@@ -315,8 +314,8 @@ void state_bcm() {
 				       &msg.frame.data[7]);
 
 			if( (items < 4) ||
-			    (msg.frame.len > 64) ||
-			    (items != 4 + msg.frame.len) ) {
+			    (msg.frame.can_dlc > 8) ||
+			    (items != 4 + msg.frame.can_dlc) ) {
 				PRINT_ERROR("syntax error in filter command.\n")
 					return;
 			}
@@ -399,7 +398,7 @@ void state_bcm() {
 			if (!ioctl(sc, SIOCGIFINDEX, &ifr)) {
 				caddr.can_ifindex = ifr.ifr_ifindex;
 				sendto(sc, &muxmsg, sizeof(struct bcm_msg_head) +
-				       sizeof(struct canfd_frame) * muxmsg.msg_head.nframes,
+				       sizeof(struct can_frame) * muxmsg.msg_head.nframes,
 				       0, (struct sockaddr*)&caddr, sizeof(caddr));
 			}
 			/* Add a filter */
