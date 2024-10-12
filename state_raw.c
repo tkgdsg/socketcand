@@ -69,6 +69,10 @@ void state_raw() {
 			return;
 		}
 
+		/*
+		 *if the device supports CAN FD, use it
+		 * if you don't want to use CAN FD, you should initialize the device as classic CAN
+		*/
 		if (ifr.ifr_mtu == CANFD_MTU) {
 			const int canfd_on = 1;
 			if(setsockopt(raw_socket, SOL_CAN_RAW, CAN_RAW_FD_FRAMES, &canfd_on, sizeof(canfd_on)) < 0) {
@@ -77,9 +81,6 @@ void state_raw() {
 				return;
 			}
 		}
-
-//		fprintf(stderr, "MTU of %s is %d\n", bus_name, ifr.ifr_mtu);
-
 
 		if(bind(raw_socket, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
 			PRINT_ERROR("Error while binding RAW socket %s\n", strerror(errno));
@@ -143,9 +144,8 @@ void state_raw() {
 			} else if(frame.can_id & CAN_RTR_FLAG) {
 				/* TODO implement */
 			} else {
-//				fprintf(stderr, "frame.can_id: %d ret size: %d\n", frame.can_id, ret);
-
 				switch(ret) {
+					// if the frame is a classic CAN frame
 					case sizeof(struct can_frame):
 						if(frame.can_id & CAN_EFF_FLAG) {
 							ret = sprintf(buf, "< frame %08X %ld.%06ld ", frame.can_id & CAN_EFF_MASK, tv.tv_sec, tv.tv_usec);
@@ -153,6 +153,7 @@ void state_raw() {
 							ret = sprintf(buf, "< frame %03X %ld.%06ld ", frame.can_id & CAN_SFF_MASK, tv.tv_sec, tv.tv_usec);
 						}
 					break;
+					// if the frame is a CAN FD frame
 					case sizeof(struct canfd_frame):
 						if(frame.can_id & CAN_EFF_FLAG) {
 							ret = sprintf(buf, "< fdframe %08X %02X %ld.%06ld ", frame.can_id & CAN_EFF_MASK, frame.flags, tv.tv_sec, tv.tv_usec);
@@ -190,7 +191,7 @@ void state_raw() {
 				return;
 			}
 
-			/* Send a single frame */
+			/* Send a single classic CAN frame */
 			if(!strncmp("< send ", buf, 7)) {
 				items = sscanf(buf, "< %*s %x %hhu "
 					       "%hhx %hhx %hhx %hhx %hhx %hhx "
@@ -205,8 +206,6 @@ void state_raw() {
 					       &frame.data[5],
 					       &frame.data[6],
 					       &frame.data[7]);
-
-//				fprintf(stderr, "%s\n", buf);
 
 				if ( (items < 2) ||
 				     (frame.len > 8) ||
@@ -224,6 +223,7 @@ void state_raw() {
 					state = STATE_SHUTDOWN;
 					return;
 				}
+				/* Send a single CANFD frame */
 			} else if(!strncmp("< fdsend ", buf, 9)) {
 		    // First, read the fixed part of the frame
 		    items = sscanf(buf, "< %*s %x %hhx %hhu",
@@ -272,9 +272,6 @@ void state_raw() {
 		                   &frame.data[56], &frame.data[57], &frame.data[58], &frame.data[59],
 		                   &frame.data[60], &frame.data[61], &frame.data[62], &frame.data[63]);
 
-//				fprintf(stderr, "items: %d frames: %d\n", items, frame.len);
-//				fprintf(stderr, "%s %s\n", buf, format);
-
 				if ( (items < 2) ||
 				     (frame.len > 64) ||
 				     (items != 3 + frame.len)) {
@@ -282,7 +279,7 @@ void state_raw() {
 						return;
 				}
 
-				/* < send XXXXXXXX ... > check for extended identifier */
+				/* < fdsend XXXXXXXX ... > check for extended identifier */
 				if(element_length(buf, 2) == 8)
 					frame.can_id |= CAN_EFF_FLAG;
 
