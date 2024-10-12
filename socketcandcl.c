@@ -227,8 +227,7 @@ int main(int argc, char **argv)
 			perror("connect");
 			exit(1);
 		}
-	}
-	 else {
+	} else {
 		/* create AF_INET socket */
 
 		server_socket = socket(AF_INET, SOCK_STREAM, 0);
